@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Log in to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: cr3qrjt56lww43a.azurecr.io
+        username: ${{ secrets.AZURE_USERNAME }}
+        password: ${{ secrets.AZURE_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: cr3qrjt56lww43a.azurecr.io/azure-search-openai-demo-csharp/web-openai-rag-chat-app:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Azure login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy to Azure
+      uses: azure/cli@v1
+      with:
+        inlineScript: |
+          az acr repository show -n cr3qrjt56lww43a --image azure-search-openai-demo-csharp/web-openai-rag-chat-app:latest
+          az container create --resource-group rg-openai-rag-chat-app --name main --image cr3qrjt56lww43a.azurecr.io/azure-search-openai-demo-csharp/web-openai-rag-chat-app:latest --cpu 1 --memory 1 --registry-login-server cr3qrjt56lww43a.azurecr.io --registry-username ${{ secrets.AZURE_USERNAME }} --registry-password ${{ secrets.AZURE_PASSWORD }}
